@@ -1,23 +1,30 @@
-<!-- src/components/DependencyGraph.vue -->
 <template>
   <div class="p-4">
-    <div class="flex gap-2 mb-4">
+    <div class="flex gap-2 mb-4 flex-wrap">
       <input
         v-model="packageName"
         type="text"
-        placeholder="Ej: flutter_riverpod"
-        class="border p-2 rounded grow"
+        placeholder="Package name (e.g., flutter_riverpod)"
+        class="border p-2 rounded grow min-w-50"
         @keyup.enter="loadGraph"
+      />
+      <input
+        v-model.number="maxDepth"
+        type="number"
+        min="1"
+        max="10"
+        placeholder="Max depth"
+        class="border p-2 rounded w-28"
       />
       <button
         @click="loadGraph"
-        class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+        class="cursor-pointer bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
       >
-        Generar gráfico
+        Generate Graph
       </button>
     </div>
 
-    <div v-if="loading" class="text-center py-8">Cargando dependencias...</div>
+    <div v-if="loading" class="text-center py-8">Loading dependencies...</div>
     <div v-else-if="error" class="text-red-600">{{ error }}</div>
 
     <div
@@ -28,25 +35,23 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref, onUnmounted } from 'vue';
 import axios from 'axios';
 import { DataSet } from 'vis-data';
 import { Network } from 'vis-network';
 
 const packageName = ref('');
+const maxDepth = ref(5); // default depth
 const loading = ref(false);
 const error = ref('');
 const networkContainer = ref(null);
 let network = null;
 
-// Conjunto para evitar duplicados (por nombre de paquete)
-const visitedPackages = new Set();
+// Store graph data
+const visitedPackages = new Map(); // name -> { version, metrics, depth }
+const edgesList = []; // { from, to }
 
-// Almacena información de cada nodo (para el tooltip)
-const nodesData = new Map();
-
-// --- Funciones de API ---
-
+// --- API helpers (using local proxies) ---
 async function getLatestVersion(pkg) {
   const res = await axios.get(`/api/package-info?package=${pkg}`);
   return res.data.latest.version;
@@ -54,7 +59,8 @@ async function getLatestVersion(pkg) {
 
 async function getDependencies(pkg, version) {
   const res = await axios.get(`/api/dependencies?package=${pkg}&version=${version}`);
-  return res.data.dependencies; // ya es un array de strings
+  console.log(`Dependencies for ${pkg}@${version}:`, res.data);
+  return res.data.dependencies;
 }
 
 async function getMetrics(pkg) {
@@ -70,126 +76,131 @@ async function getMetrics(pkg) {
   }
 }
 
-// --- Construcción recursiva del grafo ---
-async function buildGraph(pkg, parentNodeId = null, depth = 0, maxDepth = 3) {
-  if (depth > maxDepth) return;
+// --- Recursive dependency builder ---
+async function buildGraph(pkg, parent = null, depth = 0) {
+  if (depth > maxDepth.value) return;
   if (visitedPackages.has(pkg)) return;
-  visitedPackages.add(pkg);
 
-  // Obtener versión y dependencias
-  let version;
+  // Fetch version and metrics
+  let version, metrics;
   try {
     version = await getLatestVersion(pkg);
+    metrics = await getMetrics(pkg);
   } catch (err) {
-    console.error(`No se pudo obtener versión de ${pkg}`, err);
+    console.error(`Failed to fetch data for ${pkg}:`, err);
+    error.value = `Error fetching ${pkg}: ${err.message}`;
     return;
   }
 
-  // Obtener métricas (para tooltip)
-  const metrics = await getMetrics(pkg);
-  nodesData.set(pkg, { name: pkg, version, ...metrics });
+  visitedPackages.set(pkg, { version, metrics, depth });
 
-  // Agregar nodo (más tarde lo renderizamos con vis)
-  // (la red se actualizará después de construir todo el grafo)
+  // If there is a parent, add edge
+  if (parent) {
+    edgesList.push({ from: parent, to: pkg });
+  }
 
-  const deps = await getDependencies(pkg, version);
+  // Fetch dependencies
+  let deps = [];
+  try {
+    deps = await getDependencies(pkg, version);
+    console.log(`Fetched ${deps.length} dependencies for ${pkg}@${version}`);
+  } catch (err) {
+    console.error(`Failed to fetch dependencies for ${pkg}:`, err);
+    return;
+  }
+
+  // Process each dependency recursively
   for (const dep of deps) {
-    // Agregar arista entre pkg y dep
-    if (!visitedPackages.has(dep)) {
-      await buildGraph(dep, pkg, depth + 1, maxDepth);
-    }
+    console.log(`Processing ${dep} (depth ${depth + 1})`);
+    await buildGraph(dep, pkg, depth + 1);
   }
 }
 
-// --- Renderizado con vis-network ---
-function renderGraph(rootPackage) {
+// --- Render graph with vis-network ---
+function renderGraph() {
   const nodes = [];
-  const edges = [];
-
-  // Construir nodos a partir de nodesData y visitedPackages
-  for (const pkg of visitedPackages) {
-    const info = nodesData.get(pkg);
+  for (const [name, info] of visitedPackages.entries()) {
     const tooltip = `
-        ${info.name}
-        Versión: ${info.version}
-        👍 Likes: ${info.likes}
-        📊 Popularidad: ${info.popularity}
-        🧪 Pub Points: ${info.pubPoints}
+        ${name}
+        Version: ${info.version}
+        👍 Likes: ${info.metrics.likes}
+        📊 Popularity: ${info.metrics.popularity}
+        🧪 Pub Points: ${info.metrics.pubPoints}
+        Depth: ${info.depth}
     `;
     nodes.push({
-      id: pkg,
-      label: pkg,
-      title: tooltip, // vis-network usa 'title' para tooltip HTML
+      id: name,
+      label: name,
+      title: tooltip,
       shape: 'box',
       font: { size: 12 },
+      level: info.depth, // for hierarchical layout (optional)
     });
   }
 
-  // Construir aristas (necesitamos registrar las relaciones durante el build)
-  // Para simplificar, volveremos a recorrer los paquetes y pedir dependencias
-  // (mejor: durante buildGraph guardar edges en un array)
-  // Como buildGraph ya recorrió todo, podemos reconstruir edges desde cero:
-  (async () => {
-    for (const pkg of visitedPackages) {
-      const version = await getLatestVersion(pkg);
-      const deps = await getDependencies(pkg, version);
-      for (const dep of deps) {
-        if (visitedPackages.has(dep)) {
-          edges.push({ from: pkg, to: dep, arrows: 'to' });
-        }
-      }
-    }
-    // Renderizar red
-    const container = networkContainer.value;
-    if (!container) return;
+  const edges = edgesList.map(edge => ({
+    from: edge.from,
+    to: edge.to,
+    arrows: 'to',
+  }));
 
-    const data = {
-      nodes: new DataSet(nodes),
-      edges: new DataSet(edges),
-    };
-    const options = {
-      nodes: {
-        shape: 'box',
-        margin: 10,
-        widthConstraint: { minimum: 100 },
-        font: { size: 14, face: 'sans-serif' },
+  const container = networkContainer.value;
+  if (!container) return;
+
+  const data = {
+    nodes: new DataSet(nodes),
+    edges: new DataSet(edges),
+  };
+
+  const options = {
+    layout: {
+      hierarchical: {
+        enabled: true,
+        direction: 'UD', // Up-Down
+        sortMethod: 'directed',
       },
-      edges: {
-        arrows: { to: { enabled: true, scaleFactor: 0.8 } },
-        smooth: { type: 'cubicBezier' },
-      },
-      physics: { stabilization: true, barnesHut: { gravitationalConstant: -8000 } },
-      interaction: { hover: true, tooltipDelay: 200 },
-    };
-    if (network) network.destroy();
-    network = new Network(container, data, options);
-  })();
+    },
+    nodes: {
+      shape: 'box',
+      margin: 10,
+      widthConstraint: { minimum: 100 },
+      font: { size: 14, face: 'sans-serif' },
+    },
+    edges: {
+      arrows: { to: { enabled: true, scaleFactor: 0.8 } },
+      smooth: { type: 'cubicBezier' },
+    },
+    physics: false, // hierarchical layout works better with physics off
+    interaction: { hover: true, tooltipDelay: 200 },
+  };
+
+  if (network) network.destroy();
+  network = new Network(container, data, options);
 }
 
-// --- Cargador principal ---
+// --- Main loader ---
 async function loadGraph() {
   if (!packageName.value.trim()) return;
   loading.value = true;
   error.value = '';
   visitedPackages.clear();
-  nodesData.clear();
+  edgesList.length = 0;
 
   try {
-    await buildGraph(packageName.value.trim(), null, 0, 3); // Profundidad máxima 3
+    await buildGraph(packageName.value.trim(), null, 0);
     if (visitedPackages.size === 0) {
-      error.value = 'No se encontraron dependencias o el paquete no existe.';
+      error.value = 'No dependencies found or package does not exist.';
     } else {
-      renderGraph(packageName.value);
+      renderGraph();
     }
   } catch (err) {
     console.error(err);
-    error.value = 'Error al cargar el gráfico. Revisa la consola.';
+    error.value = 'Error loading graph. Check console for details.';
   } finally {
     loading.value = false;
   }
 }
 
-// Limpiar red al desmontar
 onUnmounted(() => {
   if (network) network.destroy();
 });
