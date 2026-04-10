@@ -36,7 +36,6 @@
 
 <script setup>
 import { ref, onUnmounted } from 'vue';
-import axios from 'axios';
 import { DataSet } from 'vis-data';
 import { Network } from 'vis-network';
 
@@ -53,26 +52,28 @@ const edgesList = []; // { from, to }
 
 // --- API helpers (using local proxies) ---
 async function getLatestVersion(pkg) {
-  const res = await axios.get(`/api/package-info?package=${pkg}`);
-  return res.data.latest.version;
+  const res = await fetch(`/api/package-info?package=${pkg}`);
+  const data = await res.json();
+  return data.latest.version;
 }
 
 async function getDependencies(pkg, version) {
-  const res = await axios.get(`/api/dependencies?package=${pkg}&version=${version}`);
-  console.log(`Dependencies for ${pkg}@${version}:`, res.data);
-  return res.data.dependencies;
+  const res = await fetch(`/api/dependencies?package=${pkg}&version=${version}`);
+  const data = await res.json();
+  return data.dependencies;
 }
 
 async function getMetrics(pkg) {
   try {
-    const res = await axios.get(`/api/metrics?package=${pkg}`);
+    const res = await fetch(`/api/metrics?package=${pkg}`);
+    const data = await res.json();
     return {
-      likes: res.data.likes,
-      popularity: res.data.popularity,
-      pubPoints: res.data.pubPoints,
+      likes: data.likes,
+      downloads: data.downloads,
+      pubPoints: data.pubPoints,
     };
   } catch {
-    return { likes: '?', popularity: '?', pubPoints: '?' };
+    return { likes: '?', downloads: '?', pubPoints: '?' };
   }
 }
 
@@ -87,7 +88,6 @@ async function buildGraph(pkg, parent = null, depth = 0) {
     version = await getLatestVersion(pkg);
     metrics = await getMetrics(pkg);
   } catch (err) {
-    console.error(`Failed to fetch data for ${pkg}:`, err);
     error.value = `Error fetching ${pkg}: ${err.message}`;
     return;
   }
@@ -103,9 +103,7 @@ async function buildGraph(pkg, parent = null, depth = 0) {
   let deps = [];
   try {
     deps = await getDependencies(pkg, version);
-    console.log(`Fetched ${deps.length} dependencies for ${pkg}@${version}`);
   } catch (err) {
-    console.error(`Failed to fetch dependencies for ${pkg}:`, err);
     return;
   }
 
@@ -124,7 +122,7 @@ function renderGraph() {
         ${name}
         Version: ${info.version}
         👍 Likes: ${info.metrics.likes}
-        📊 Popularity: ${info.metrics.popularity}
+        📊 Downloads: ${info.metrics.downloads}
         🧪 Pub Points: ${info.metrics.pubPoints}
         Depth: ${info.depth}
     `;
