@@ -9,9 +9,9 @@ export const GET: APIRoute = async ({ url }) => {
     if (!res.ok) throw new Error();
     const data = await res.json();
     return new Response(JSON.stringify({
-      likes: data.likes ?? 0,
-      popularity: data.popularityScore?.toFixed(2) ?? 'N/A',
-      pubPoints: data.grantedPubPoints ?? 0,
+      likes: data?.score?.likeCount ?? 0,
+      downloads: data?.score?.downloadCount30Days ?? 0,
+      pubPoints: data?.score?.grantedPoints ?? 0,
     }), { headers: { 'Content-Type': 'application/json' } });
   } catch {
     return new Response(JSON.stringify({ likes: '?', popularity: '?', pubPoints: '?' }), {
