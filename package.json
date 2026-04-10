@@ -17,7 +17,6 @@
     "@astrojs/vue": "^6.0.1",
     "@tailwindcss/vite": "^4.2.2",
     "astro": "^6.1.5",
-    "axios": "^1.15.0",
     "complete-js-utils": "^1.1.2",
     "marked": "^18.0.0",
     "tailwindcss": "^4.2.2",
