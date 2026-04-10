@@ -8,7 +8,7 @@
             Package name
           </label>
           <input
-            v-model="packageName"
+            v-model.trim="packageName"
             type="text"
             placeholder="e.g., flutter_riverpod, provider, bloc..."
             class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all outline-none"
@@ -31,7 +31,7 @@
           <button
             @click="loadGraph"
             :disabled="loading || !packageName.trim()"
-            class="w-full sm:w-auto px-6 py-3 bg-linear-to-r from-blue-600 to-purple-600 text-white font-medium rounded-xl hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+            class="cursor-pointer w-full sm:w-auto px-6 py-3 bg-linear-to-r from-blue-600 to-purple-600 text-white font-medium rounded-xl hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
           >
             <span v-if="loading">Loading...</span>
             <span v-else>🔍 Generate Graph</span>
