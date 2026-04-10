@@ -17,6 +17,7 @@
     "astro": "^6.1.5",
     "axios": "^1.15.0",
     "complete-js-utils": "^1.1.2",
+    "marked": "^18.0.0",
     "tailwindcss": "^4.2.2",
     "vis-data": "^8.0.3",
     "vis-network": "^10.0.2",
