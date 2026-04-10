@@ -18,10 +18,16 @@ export const GET: APIRoute = async ({ url }) => {
         return new Response('Dependencies section not found', { status: 404 });
     }
 
-    const summary = get(dependencySection, 'summary', '');
+    const summary: string = get(dependencySection, 'summary', '');
 
     if (!summary) {
         return new Response('No dependencies found', { status: 404 });
+    }
+
+    if (summary.includes('No dependencies')) {
+        return new Response(JSON.stringify({ dependencies: [] }), {
+            headers: { 'Content-Type': 'application/json' }
+        });
     }
 
     const firstColumn = extractFirstTableFirstColumn(summary);
