@@ -92,6 +92,7 @@
   </div>
 </template>
 
+
 <script setup>
 import { ref, onUnmounted } from 'vue';
 import { DataSet } from 'vis-data';
@@ -109,12 +110,28 @@ const edgesList = [];
 
 async function getLatestVersion(pkg) {
   const res = await fetch(`/api/package-info?package=${pkg}`);
+  
+  if (!res.ok) {
+    if (res.status === 404) {
+      throw new Error(`Package "${pkg}" not found`);
+    }
+    throw new Error(`Failed to fetch package info: ${res.status}`);
+  }
+  
   const data = await res.json();
   return data.latest.version;
 }
 
 async function getDependencies(pkg, version) {
   const res = await fetch(`/api/dependencies?package=${pkg}&version=${version}`);
+  
+  if (!res.ok) {
+    if (res.status === 404) {
+      throw new Error(`Dependencies for "${pkg}@${version}" not found`);
+    }
+    throw new Error(`Failed to fetch dependencies: ${res.status}`);
+  }
+  
   const data = await res.json();
   return data.dependencies;
 }
@@ -122,6 +139,11 @@ async function getDependencies(pkg, version) {
 async function getMetrics(pkg) {
   try {
     const res = await fetch(`/api/metrics?package=${pkg}`);
+    
+    if (!res.ok) {
+      return { likes: '?', downloads: '?', pubPoints: '?' };
+    }
+    
     const data = await res.json();
     return {
       likes: data.likes,
@@ -142,7 +164,12 @@ async function buildGraph(pkg, parent = null, depth = 0) {
     version = await getLatestVersion(pkg);
     metrics = await getMetrics(pkg);
   } catch (err) {
-    error.value = `Error fetching ${pkg}: ${err.message}`;
+    // Si es el paquete raíz, mostramos el error principal
+    if (depth === 0) {
+      throw err;
+    }
+    // Si es una dependencia, solo logueamos y continuamos
+    console.warn(`Skipping ${pkg}: ${err.message}`);
     return;
   }
 
@@ -156,6 +183,7 @@ async function buildGraph(pkg, parent = null, depth = 0) {
   try {
     deps = await getDependencies(pkg, version);
   } catch (err) {
+    console.warn(`Could not fetch dependencies for ${pkg}:`, err.message);
     return;
   }
 
@@ -264,7 +292,7 @@ async function loadGraph() {
     }
   } catch (err) {
     console.error(err);
-    error.value = 'Error loading graph. Check console for details.';
+    error.value = err.message || 'Error loading graph. Check console for details.';
   } finally {
     loading.value = false;
   }
