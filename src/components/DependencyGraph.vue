@@ -168,11 +168,9 @@ async function buildGraph(pkg, parent = null, depth = 0) {
     version = await getLatestVersion(pkg);
     metrics = await getMetrics(pkg);
   } catch (err) {
-    // Si es el paquete raíz, mostramos el error principal
     if (depth === 0) {
       throw err;
     }
-    // Si es una dependencia, solo logueamos y continuamos
     console.warn(`Skipping ${pkg}: ${err.message}`);
     return;
   }
@@ -187,12 +185,10 @@ async function buildGraph(pkg, parent = null, depth = 0) {
   try {
     deps = await getDependencies(pkg, version);
   } catch (err) {
-    console.warn(`Could not fetch dependencies for ${pkg}:`, err.message);
     return;
   }
 
   for (const dep of deps) {
-    console.log(`Processing ${dep} (depth ${depth + 1})`);
     await buildGraph(dep, pkg, depth + 1);
   }
 }
