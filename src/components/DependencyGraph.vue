@@ -53,6 +53,9 @@
       <a :href="`https://pub.dev/packages/${packageName.trim()}`" target="_blank" class="bg-green-50 px-4 py-2 rounded-lg text-green-700 hover:bg-green-100 transition-all">
         View on pub.dev
       </a>
+      <button class="bg-orange-50 px-4 py-2 rounded-lg text-orange-700 hover:bg-orange-100 transition-all cursor-pointer" @click="downloadImage">
+        Download as Image
+      </button>
     </div>
 
     <!-- Loading State -->
@@ -368,6 +371,23 @@ async function loadGraph(): Promise<void> {
     loading.value = false;
   }
 }
+
+const downloadImage = () => {
+  if (!network) return;
+  
+  network.fit({ animation: false });
+
+  requestAnimationFrame(() => {
+    const canvas = networkContainer.value?.querySelector("canvas") as HTMLCanvasElement;
+    if (!canvas) return;
+    const url = canvas.toDataURL("image/png");
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${packageName.value.trim()}-dependency-graph.png`;
+    a.click();
+  });
+};
 
 // Cleanup
 onUnmounted(() => {
