@@ -96,50 +96,88 @@
 </template>
 
 
-<script setup>
-import { ref, onUnmounted } from 'vue';
+<script setup lang="ts">
+import { ref, onUnmounted, nextTick } from 'vue';
 import { DataSet } from 'vis-data';
 import { Network } from 'vis-network';
+import type { Options, Node, Edge } from 'vis-network';
 
-const packageName = ref('');
-const maxDepth = ref(5);
-const loading = ref(false);
-const error = ref('');
-const networkContainer = ref(null);
-let network = null;
+// Types
+interface PackageMetrics {
+  likes: number | string;
+  downloads: number | string;
+  pubPoints: number | string;
+}
 
-const visitedPackages = new Map();
-const edgesList = [];
+interface PackageInfo {
+  version: string;
+  metrics: PackageMetrics;
+  depth: number;
+}
 
-async function getLatestVersion(pkg) {
+interface GraphEdge {
+  from: string;
+  to: string;
+}
+
+// State
+const packageName = ref<string>('');
+const maxDepth = ref<number>(5);
+const loading = ref<boolean>(false);
+const error = ref<string>('');
+const networkContainer = ref<HTMLElement | null>(null);
+let network: Network | null = null;
+
+const visitedPackages = new Map<string, PackageInfo>();
+const edgesList: GraphEdge[] = [];
+
+// API Functions
+async function getLatestVersion(pkg: string): Promise<string> {
   const res = await fetch(`/api/package-info?package=${pkg}`);
   
   if (!res.ok) {
     if (res.status === 404) {
       throw new Error(`Package "${pkg}" not found`);
     }
-    throw new Error(`Failed to fetch package info: ${res.status}`);
+    throw new Error(`Failed to fetch package info (HTTP ${res.status})`);
+  }
+  
+  const contentType = res.headers.get('content-type');
+  if (!contentType || !contentType.includes('application/json')) {
+    throw new Error(`Package "${pkg}" not found or invalid response`);
   }
   
   const data = await res.json();
+  
+  if (!data.latest || !data.latest.version) {
+    throw new Error(`Invalid package data for "${pkg}"`);
+  }
+  
   return data.latest.version;
 }
 
-async function getDependencies(pkg, version) {
+async function getDependencies(pkg: string, version: string): Promise<string[]> {
   const res = await fetch(`/api/dependencies?package=${pkg}&version=${version}`);
   
   if (!res.ok) {
     if (res.status === 404) {
-      throw new Error(`Dependencies for "${pkg}@${version}" not found`);
+      console.warn(`Dependencies for "${pkg}@${version}" not found`);
+      return [];
     }
-    throw new Error(`Failed to fetch dependencies: ${res.status}`);
+    throw new Error(`Failed to fetch dependencies (HTTP ${res.status})`);
+  }
+  
+  const contentType = res.headers.get('content-type');
+  if (!contentType || !contentType.includes('application/json')) {
+    console.warn(`Invalid response for dependencies of "${pkg}@${version}"`);
+    return [];
   }
   
   const data = await res.json();
-  return data.dependencies;
+  return data.dependencies || [];
 }
 
-async function getMetrics(pkg) {
+async function getMetrics(pkg: string): Promise<PackageMetrics> {
   try {
     const res = await fetch(`/api/metrics?package=${pkg}`);
     
@@ -147,22 +185,30 @@ async function getMetrics(pkg) {
       return { likes: '?', downloads: '?', pubPoints: '?' };
     }
     
+    const contentType = res.headers.get('content-type');
+    if (!contentType || !contentType.includes('application/json')) {
+      return { likes: '?', downloads: '?', pubPoints: '?' };
+    }
+    
     const data = await res.json();
     return {
-      likes: data.likes,
-      downloads: data.downloads,
-      pubPoints: data.pubPoints,
+      likes: data.likes ?? '?',
+      downloads: data.downloads ?? '?',
+      pubPoints: data.pubPoints ?? '?',
     };
   } catch {
     return { likes: '?', downloads: '?', pubPoints: '?' };
   }
 }
 
-async function buildGraph(pkg, parent = null, depth = 0) {
+// Graph Building
+async function buildGraph(pkg: string, parent: string | null = null, depth: number = 0): Promise<void> {
   if (depth > maxDepth.value) return;
   if (visitedPackages.has(pkg)) return;
 
-  let version, metrics;
+  let version: string;
+  let metrics: PackageMetrics;
+  
   try {
     version = await getLatestVersion(pkg);
     metrics = await getMetrics(pkg);
@@ -170,7 +216,7 @@ async function buildGraph(pkg, parent = null, depth = 0) {
     if (depth === 0) {
       throw err;
     }
-    console.warn(`Skipping ${pkg}: ${err.message}`);
+    console.warn(`Skipping ${pkg}: ${err instanceof Error ? err.message : 'Unknown error'}`);
     return;
   }
 
@@ -180,10 +226,11 @@ async function buildGraph(pkg, parent = null, depth = 0) {
     edgesList.push({ from: parent, to: pkg });
   }
 
-  let deps = [];
+  let deps: string[] = [];
   try {
     deps = await getDependencies(pkg, version);
   } catch (err) {
+    console.warn(`Failed to get dependencies for ${pkg}: ${err instanceof Error ? err.message : 'Unknown error'}`);
     return;
   }
 
@@ -192,8 +239,10 @@ async function buildGraph(pkg, parent = null, depth = 0) {
   }
 }
 
-function renderGraph() {
-  const nodes = [];
+// Graph Rendering
+function renderGraph(): void {
+  const nodes: Node[] = [];
+  
   for (const [name, info] of visitedPackages.entries()) {
     const tooltip = `${name}
 Version: ${info.version}
@@ -202,7 +251,6 @@ Version: ${info.version}
 🏆 Pub Points: ${info.metrics.pubPoints}
 📏 Depth: ${info.depth}`;
     
-    // Color based on depth
     const colors = ['#3B82F6', '#8B5CF6', '#EC4899', '#F59E0B', '#10B981'];
     const color = colors[Math.min(info.depth, colors.length - 1)];
     
@@ -218,12 +266,17 @@ Version: ${info.version}
         highlight: { background: color, border: '#1F2937' }
       },
       borderWidth: 2,
-      margin: 12,
+      margin: {
+        top: 10,
+        bottom: 10,
+        left: 15,
+        right: 15
+      },
       level: info.depth,
     });
   }
 
-  const edges = edgesList.map(edge => ({
+  const edges: Edge[] = edgesList.map(edge => ({
     from: edge.from,
     to: edge.to,
     arrows: { to: { enabled: true, scaleFactor: 1 } },
@@ -239,7 +292,7 @@ Version: ${info.version}
     edges: new DataSet(edges),
   };
 
-  const options = {
+  const options: Options = {
     layout: {
       hierarchical: {
         enabled: true,
@@ -251,7 +304,12 @@ Version: ${info.version}
     },
     nodes: {
       shape: 'box',
-      margin: 12,
+      margin: {
+        top: 10,
+        bottom: 10,
+        left: 15,
+        right: 15
+      },
       widthConstraint: { minimum: 120, maximum: 200 },
       font: { size: 13, face: 'system-ui, -apple-system, sans-serif', color: '#FFFFFF' },
       borderWidth: 0,
@@ -259,7 +317,7 @@ Version: ${info.version}
     },
     edges: {
       arrows: { to: { enabled: true, scaleFactor: 1 } },
-      smooth: { type: 'cubicBezier', roundness: 0.5 },
+      smooth: { enabled: true, type: 'cubicBezier', roundness: 0.5 },
       width: 2,
     },
     physics: false,
@@ -273,10 +331,24 @@ Version: ${info.version}
 
   if (network) network.destroy();
   network = new Network(container, data, options);
+
+  // Center the graph after rendering
+  setTimeout(() => {
+    if (network) {
+      network.fit({
+        animation: {
+          duration: 500,
+          easingFunction: 'easeInOutQuad'
+        }
+      });
+    }
+  }, 100);
 }
 
-async function loadGraph() {
+// Main Load Function
+async function loadGraph(): Promise<void> {
   if (!packageName.value.trim()) return;
+  
   loading.value = true;
   error.value = '';
   visitedPackages.clear();
@@ -287,15 +359,17 @@ async function loadGraph() {
     if (visitedPackages.size === 0) {
       error.value = 'No dependencies found or package does not exist.';
     } else {
+      await nextTick();
       renderGraph();
     }
   } catch (err) {
-    error.value = err.message || 'Error loading graph. Check console for details.';
+    error.value = err instanceof Error ? err.message : 'Error loading graph. Check console for details.';
   } finally {
     loading.value = false;
   }
 }
 
+// Cleanup
 onUnmounted(() => {
   if (network) network.destroy();
 });
