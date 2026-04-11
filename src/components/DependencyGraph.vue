@@ -98,7 +98,7 @@
 
 
 <script setup>
-import { ref, onUnmounted } from 'vue';
+import { ref, onUnmounted, nextTick } from 'vue';
 import { DataSet } from 'vis-data';
 import { Network } from 'vis-network';
 
@@ -295,6 +295,15 @@ async function loadGraph() {
     error.value = err.message || 'Error loading graph. Check console for details.';
   } finally {
     loading.value = false;
+    await nextTick();
+    if (network) {
+      network.fit({
+        animation: {
+          duration: 500,
+          easingFunction: 'easeInOutQuad'
+        }
+      });
+    }
   }
 }
 
