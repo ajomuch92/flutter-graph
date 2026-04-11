@@ -8,7 +8,7 @@
             Package name
           </label>
           <input
-            v-model.trim="packageName"
+            v-model="packageName"
             type="text"
             placeholder="e.g., flutter_riverpod, provider, bloc..."
             class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all outline-none"
@@ -75,7 +75,6 @@
 
     <!-- Graph Container -->
     <div
-      v-show="!loading"
       ref="networkContainer"
       class="w-full rounded-xl border-2 border-gray-200 bg-gray-50 transition-all"
       :class="visitedPackages.size > 0 ? 'h-150' : 'h-100'"
@@ -98,7 +97,7 @@
 
 
 <script setup>
-import { ref, onUnmounted, nextTick } from 'vue';
+import { ref, onUnmounted } from 'vue';
 import { DataSet } from 'vis-data';
 import { Network } from 'vis-network';
 
@@ -291,19 +290,9 @@ async function loadGraph() {
       renderGraph();
     }
   } catch (err) {
-    console.error(err);
     error.value = err.message || 'Error loading graph. Check console for details.';
   } finally {
     loading.value = false;
-    await nextTick();
-    if (network) {
-      network.fit({
-        animation: {
-          duration: 500,
-          easingFunction: 'easeInOutQuad'
-        }
-      });
-    }
   }
 }
 
