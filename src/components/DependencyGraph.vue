@@ -50,6 +50,9 @@
         <span class="font-semibold text-purple-900">{{ edgesList.length }}</span>
         <span class="text-purple-700 ml-1">dependencies</span>
       </div>
+      <a :href="`https://pub.dev/packages/${packageName.trim()}`" target="_blank" class="bg-green-50 px-4 py-2 rounded-lg text-green-700 hover:bg-green-100 transition-all">
+        View on pub.dev
+      </a>
     </div>
 
     <!-- Loading State -->
@@ -72,6 +75,7 @@
 
     <!-- Graph Container -->
     <div
+      v-show="!loading"
       ref="networkContainer"
       class="w-full rounded-xl border-2 border-gray-200 bg-gray-50 transition-all"
       :class="visitedPackages.size > 0 ? 'h-150' : 'h-100'"
