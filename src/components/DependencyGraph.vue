@@ -113,7 +113,7 @@ interface PackageMetrics {
 }
 
 interface PackageInfo {
-  version: string;
+  version?: string;
   metrics: PackageMetrics;
   depth: number;
 }
@@ -159,12 +159,12 @@ async function getLatestVersion(pkg: string): Promise<string> {
   return data.latest.version;
 }
 
-async function getDependencies(pkg: string, version: string): Promise<string[]> {
-  const res = await fetch(`/api/dependencies?package=${pkg}&version=${version}`);
+async function getDependencies(pkg: string): Promise<string[]> {
+  const res = await fetch(`/api/dependencies?package=${pkg}`);
   
   if (!res.ok) {
     if (res.status === 404) {
-      console.warn(`Dependencies for "${pkg}@${version}" not found`);
+      console.warn(`Dependencies for "${pkg}" not found`);
       return [];
     }
     throw new Error(`Failed to fetch dependencies (HTTP ${res.status})`);
@@ -172,7 +172,7 @@ async function getDependencies(pkg: string, version: string): Promise<string[]> 
   
   const contentType = res.headers.get('content-type');
   if (!contentType || !contentType.includes('application/json')) {
-    console.warn(`Invalid response for dependencies of "${pkg}@${version}"`);
+    console.warn(`Invalid response for dependencies of "${pkg}"`);
     return [];
   }
   
@@ -209,11 +209,9 @@ async function buildGraph(pkg: string, parent: string | null = null, depth: numb
   if (depth > maxDepth.value) return;
   if (visitedPackages.has(pkg)) return;
 
-  let version: string;
   let metrics: PackageMetrics;
   
   try {
-    version = await getLatestVersion(pkg);
     metrics = await getMetrics(pkg);
   } catch (err) {
     if (depth === 0) {
@@ -223,7 +221,7 @@ async function buildGraph(pkg: string, parent: string | null = null, depth: numb
     return;
   }
 
-  visitedPackages.set(pkg, { version, metrics, depth });
+  visitedPackages.set(pkg, {  metrics, depth });
 
   if (parent) {
     edgesList.push({ from: parent, to: pkg });
@@ -231,7 +229,7 @@ async function buildGraph(pkg: string, parent: string | null = null, depth: numb
 
   let deps: string[] = [];
   try {
-    deps = await getDependencies(pkg, version);
+    deps = await getDependencies(pkg);
   } catch (err) {
     console.warn(`Failed to get dependencies for ${pkg}: ${err instanceof Error ? err.message : 'Unknown error'}`);
     return;
@@ -302,7 +300,7 @@ Version: ${info.version}
         direction: 'UD',
         sortMethod: 'directed',
         levelSeparation: 150,
-        nodeSpacing: 120,
+        nodeSpacing: 180,
       },
     },
     nodes: {
