@@ -1,16 +1,11 @@
 import type { APIRoute } from 'astro';
 import { cache } from '../../lib/cache';
-import { get } from 'complete-js-utils';
-import { marked } from 'marked';
-
-marked.setOptions({ async: false });
 
 export const GET: APIRoute = async ({ url }) => {
   const pkg = url.searchParams.get('package');
-  const version = url.searchParams.get('version');
-  if (!pkg || !version) return new Response('Package and version required', { status: 400 });
+  if (!pkg ) return new Response('Package and version required', { status: 400 });
 
-  const cacheKey = `dependencies:${pkg}:${version}`;
+  const cacheKey = `dependencies:${pkg}`;
   const cached = cache.get(cacheKey);
   if (cached) {
     return new Response(JSON.stringify(cached), {
@@ -21,35 +16,24 @@ export const GET: APIRoute = async ({ url }) => {
     });
   }
 
-  const res = await fetch(`https://pub.dev/api/packages/${pkg}/metrics`);
+  const res = await fetch(`https://pub.dev/api/packages/${pkg}`);
   const json = await res.json();
 
-  const sections = get(json, 'scorecard.panaReport.report.sections', []);
-  const dependencySection = sections.find((s: any) => s.id === 'dependency');
-  
-  if (!dependencySection) {
-    return new Response('Dependencies section not found', { status: 404 });
+  const { latest } = json;
+  const { version, pubspec, archive_url: archiveUrl } = latest;
+
+  const headRes = await fetch(archiveUrl, { method: 'HEAD' });
+    
+  if (!headRes.ok) {
+    throw new Error('Archive not found');
   }
 
-  const summary: string = get(dependencySection, 'summary', '');
+  const contentLength = headRes.headers.get('content-length');
+  const sizeInBytes = contentLength ? parseInt(contentLength, 10) : 0;
 
-  if (!summary) {
-    return new Response('No dependencies found', { status: 404 });
-  }
+  const { description, dependencies } = pubspec;
 
-  if (summary.includes('No dependencies')) {
-    const result = { dependencies: [] };
-    cache.set(cacheKey, result);
-    return new Response(JSON.stringify(result), {
-      headers: { 
-        'Content-Type': 'application/json',
-        'X-Cache': 'MISS'
-      }
-    });
-  }
-
-  const firstColumn = extractFirstTableFirstColumn(summary);
-  const result = { dependencies: firstColumn };
+  const result = { dependencies: Object.keys(dependencies || {}), version, description, size: sizeInBytes };
   
   cache.set(cacheKey, result);
 
@@ -60,25 +44,3 @@ export const GET: APIRoute = async ({ url }) => {
     }
   });
 };
-
-function extractFirstTableFirstColumn(markdown: string): string[] {
-  const tokens = marked.lexer(markdown);
-  const cleanString = (text: string): string => {
-    const match = text.match(/\w+/g);
-    return match ? match.join('') : '';
-  };
-  for (const token of tokens) {
-    if (token.type === 'table') {
-      const firstColumnCells: string[] = [];
-      if (token.rows) {
-        for (const row of token.rows) {
-          if (row.length > 0) {
-            firstColumnCells.push(cleanString(`${row[0].text ?? ''}`));
-          }
-        }
-      }
-      return [...new Set(firstColumnCells)];
-    }
-  }
-  return [];
-}
