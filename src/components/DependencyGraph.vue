@@ -358,6 +358,10 @@ async function loadGraph(): Promise<void> {
   edgesList.length = 0;
 
   try {
+    if (network) {
+      network.destroy();
+      network = null;
+    }
     await buildGraph(packageName.value.trim(), null, 0);
     if (visitedPackages.size === 0) {
       error.value = 'No dependencies found or package does not exist.';
