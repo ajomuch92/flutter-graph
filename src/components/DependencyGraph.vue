@@ -1,133 +1,161 @@
 <template>
-  <div class="p-6 md:p-8">
-    <!-- Search Bar -->
-    <div class="mb-6">
-      <div class="flex flex-col sm:flex-row gap-3">
-        <div class="flex-1">
-          <label class="block text-sm font-medium text-gray-700 mb-2">
-            Package name
-          </label>
-          <input
-            v-model="packageName"
-            type="text"
-            placeholder="e.g., flutter_riverpod, provider, bloc..."
-            class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all outline-none"
-            @keyup.enter="loadGraph"
-          />
+    <div class="p-6 md:p-8">
+        <!-- Search Bar -->
+        <div class="mb-6">
+            <div class="flex flex-col sm:flex-row gap-3">
+                <div class="flex-1">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        Package name
+                    </label>
+                    <input
+                        v-model="packageName"
+                        type="text"
+                        placeholder="e.g., flutter_riverpod, provider, bloc..."
+                        class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all outline-none"
+                        @keyup.enter="loadGraph"
+                    />
+                </div>
+                <div class="sm:w-32">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        Max depth
+                    </label>
+                    <input
+                        v-model.number="maxDepth"
+                        type="number"
+                        min="1"
+                        max="10"
+                        class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all outline-none"
+                    />
+                </div>
+                <div class="sm:self-end">
+                    <button
+                        @click="loadGraph"
+                        :disabled="loading || !packageName.trim()"
+                        class="cursor-pointer w-full sm:w-auto px-6 py-3 bg-linear-to-r from-blue-600 to-purple-600 text-white font-medium rounded-xl hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+                    >
+                        <span v-if="loading">Loading...</span>
+                        <span v-else>🔍 Generate Graph</span>
+                    </button>
+                </div>
+            </div>
         </div>
-        <div class="sm:w-32">
-          <label class="block text-sm font-medium text-gray-700 mb-2">
-            Max depth
-          </label>
-          <input
-            v-model.number="maxDepth"
-            type="number"
-            min="1"
-            max="10"
-            class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all outline-none"
-          />
+
+        <!-- Stats Bar -->
+        <div
+            v-if="visitedPackages.size > 0 && !loading"
+            class="mb-4 flex flex-wrap gap-4 text-sm"
+        >
+            <div class="bg-blue-50 px-4 py-2 rounded-lg">
+                <span class="font-semibold text-blue-900">{{
+                    visitedPackages.size
+                }}</span>
+                <span class="text-blue-700 ml-1">packages found</span>
+            </div>
+            <div class="bg-purple-50 px-4 py-2 rounded-lg">
+                <span class="font-semibold text-purple-900">{{
+                    edgesList.length
+                }}</span>
+                <span class="text-purple-700 ml-1">dependencies</span>
+            </div>
+            <a
+                :href="`https://pub.dev/packages/${packageName.trim()}`"
+                target="_blank"
+                class="bg-green-50 px-4 py-2 rounded-lg text-green-700 hover:bg-green-100 transition-all"
+            >
+                View on pub.dev
+            </a>
+            <button
+                class="bg-orange-50 px-4 py-2 rounded-lg text-orange-700 hover:bg-orange-100 transition-all cursor-pointer"
+                @click="downloadImage"
+            >
+                Download as Image
+            </button>
         </div>
-        <div class="sm:self-end">
-          <button
-            @click="loadGraph"
-            :disabled="loading || !packageName.trim()"
-            class="cursor-pointer w-full sm:w-auto px-6 py-3 bg-linear-to-r from-blue-600 to-purple-600 text-white font-medium rounded-xl hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
-          >
-            <span v-if="loading">Loading...</span>
-            <span v-else>🔍 Generate Graph</span>
-          </button>
+
+        <!-- Loading State -->
+        <div v-if="loading" class="text-center py-16">
+            <div
+                class="inline-block animate-spin rounded-full h-12 w-12 border-4 border-gray-200 border-t-blue-600 mb-4"
+            ></div>
+            <p class="text-gray-600 font-medium">Analyzing dependencies...</p>
+            <p class="text-sm text-gray-500 mt-2">
+                This may take a moment for larger graphs.
+            </p>
         </div>
-      </div>
-    </div>
 
-    <!-- Stats Bar -->
-    <div v-if="visitedPackages.size > 0 && !loading" class="mb-4 flex flex-wrap gap-4 text-sm">
-      <div class="bg-blue-50 px-4 py-2 rounded-lg">
-        <span class="font-semibold text-blue-900">{{ visitedPackages.size }}</span>
-        <span class="text-blue-700 ml-1">packages found</span>
-      </div>
-      <div class="bg-purple-50 px-4 py-2 rounded-lg">
-        <span class="font-semibold text-purple-900">{{ edgesList.length }}</span>
-        <span class="text-purple-700 ml-1">dependencies</span>
-      </div>
-      <a :href="`https://pub.dev/packages/${packageName.trim()}`" target="_blank" class="bg-green-50 px-4 py-2 rounded-lg text-green-700 hover:bg-green-100 transition-all">
-        View on pub.dev
-      </a>
-      <button class="bg-orange-50 px-4 py-2 rounded-lg text-orange-700 hover:bg-orange-100 transition-all cursor-pointer" @click="downloadImage">
-        Download as Image
-      </button>
-    </div>
-
-    <!-- Loading State -->
-    <div v-if="loading" class="text-center py-16">
-      <div class="inline-block animate-spin rounded-full h-12 w-12 border-4 border-gray-200 border-t-blue-600 mb-4"></div>
-      <p class="text-gray-600 font-medium">Analyzing dependencies...</p>
-      <p class="text-sm text-gray-500 mt-2">This may take a moment for larger graphs.</p>
-    </div>
-
-    <!-- Error State -->
-    <div v-else-if="error" class="bg-red-50 border border-red-200 rounded-xl p-4 text-red-700">
-      <div class="flex items-start gap-3">
-        <span class="text-xl">⚠️</span>
-        <div>
-          <p class="font-medium">Error</p>
-          <p class="text-sm">{{ error }}</p>
+        <!-- Error State -->
+        <div
+            v-else-if="error"
+            class="bg-red-50 border border-red-200 rounded-xl p-4 text-red-700"
+        >
+            <div class="flex items-start gap-3">
+                <span class="text-xl">⚠️</span>
+                <div>
+                    <p class="font-medium">Error</p>
+                    <p class="text-sm">{{ error }}</p>
+                </div>
+            </div>
         </div>
-      </div>
-    </div>
 
-    <!-- Graph Container -->
-    <div
-      ref="networkContainer"
-      class="w-full rounded-xl border-2 border-gray-200 bg-gray-50 transition-all"
-      :class="visitedPackages.size > 0 ? 'h-150' : 'h-100'"
-    >
-      <div v-if="!loading && visitedPackages.size === 0" class="flex items-center justify-center h-full text-gray-400">
-        <div class="text-center">
-          <div class="text-6xl mb-4">🔍</div>
-          <p class="text-lg font-medium">Enter a package to begin</p>
-          <p class="text-sm mt-2">The graph will appear here</p>
+        <!-- Graph Container -->
+        <div
+            ref="networkContainer"
+            class="w-full rounded-xl border-2 border-gray-200 bg-gray-50 transition-all"
+            :class="visitedPackages.size > 0 ? 'h-150' : 'h-100'"
+        >
+            <div
+                v-if="!loading && visitedPackages.size === 0"
+                class="flex items-center justify-center h-full text-gray-400"
+            >
+                <div class="text-center">
+                    <div class="text-6xl mb-4">🔍</div>
+                    <p class="text-lg font-medium">Enter a package to begin</p>
+                    <p class="text-sm mt-2">The graph will appear here</p>
+                </div>
+            </div>
         </div>
-      </div>
-    </div>
 
-    <!-- Instructions -->
-    <div v-if="visitedPackages.size > 0" class="mt-4 text-sm text-gray-500 text-center">
-      💡 Tip: Use your mouse to zoom and drag the graph. Hover over a node to see more details.
+        <!-- Instructions -->
+        <div
+            v-if="visitedPackages.size > 0"
+            class="mt-4 text-sm text-gray-500 text-center"
+        >
+            💡 Tip: Use your mouse to zoom and drag the graph. Hover over a node
+            to see more details.
+        </div>
     </div>
-  </div>
 </template>
 
-
 <script setup lang="ts">
-import { ref, onUnmounted, nextTick } from 'vue';
-import { DataSet } from 'vis-data';
-import { Network } from 'vis-network';
-import type { Options, Node, Edge } from 'vis-network';
+import { ref, onUnmounted, nextTick } from "vue";
+import { DataSet } from "vis-data";
+import { Network } from "vis-network";
+import type { Options, Node, Edge } from "vis-network";
 
 // Types
 interface PackageMetrics {
-  likes: number | string;
-  downloads: number | string;
-  pubPoints: number | string;
+    likes: number | string;
+    downloads: number | string;
+    pubPoints: number | string;
+    version?: string;
 }
 
 interface PackageInfo {
-  version?: string;
-  metrics: PackageMetrics;
-  depth: number;
+    version?: string;
+    metrics: PackageMetrics;
+    depth: number;
 }
 
 interface GraphEdge {
-  from: string;
-  to: string;
+    from: string;
+    to: string;
 }
 
 // State
-const packageName = ref<string>('');
+const packageName = ref<string>("");
 const maxDepth = ref<number>(5);
 const loading = ref<boolean>(false);
-const error = ref<string>('');
+const error = ref<string>("");
 const networkContainer = ref<HTMLElement | null>(null);
 let network: Network | null = null;
 
@@ -135,264 +163,268 @@ const visitedPackages = new Map<string, PackageInfo>();
 const edgesList: GraphEdge[] = [];
 
 // API Functions
-async function getLatestVersion(pkg: string): Promise<string> {
-  const res = await fetch(`/api/package-info?package=${pkg}`);
-  
-  if (!res.ok) {
-    if (res.status === 404) {
-      throw new Error(`Package "${pkg}" not found`);
-    }
-    throw new Error(`Failed to fetch package info (HTTP ${res.status})`);
-  }
-  
-  const contentType = res.headers.get('content-type');
-  if (!contentType || !contentType.includes('application/json')) {
-    throw new Error(`Package "${pkg}" not found or invalid response`);
-  }
-  
-  const data = await res.json();
-  
-  if (!data.latest || !data.latest.version) {
-    throw new Error(`Invalid package data for "${pkg}"`);
-  }
-  
-  return data.latest.version;
-}
-
 async function getDependencies(pkg: string): Promise<string[]> {
-  const res = await fetch(`/api/dependencies?package=${pkg}`);
-  
-  if (!res.ok) {
-    if (res.status === 404) {
-      console.warn(`Dependencies for "${pkg}" not found`);
-      return [];
+    const res = await fetch(`/api/dependencies?package=${pkg}`);
+
+    if (!res.ok) {
+        if (res.status === 404) {
+            console.warn(`Dependencies for "${pkg}" not found`);
+            return [];
+        }
+        throw new Error(`Failed to fetch dependencies (HTTP ${res.status})`);
     }
-    throw new Error(`Failed to fetch dependencies (HTTP ${res.status})`);
-  }
-  
-  const contentType = res.headers.get('content-type');
-  if (!contentType || !contentType.includes('application/json')) {
-    console.warn(`Invalid response for dependencies of "${pkg}"`);
-    return [];
-  }
-  
-  const data = await res.json();
-  return data.dependencies || [];
+
+    const contentType = res.headers.get("content-type");
+    if (!contentType || !contentType.includes("application/json")) {
+        console.warn(`Invalid response for dependencies of "${pkg}"`);
+        return [];
+    }
+
+    const data = await res.json();
+    return data.dependencies || [];
 }
 
 async function getMetrics(pkg: string): Promise<PackageMetrics> {
-  try {
     const res = await fetch(`/api/metrics?package=${pkg}`);
-    
+
     if (!res.ok) {
-      return { likes: '?', downloads: '?', pubPoints: '?' };
+        if (res.status === 404) {
+            throw new Error(`Package "${pkg}" not found on pub.dev`);
+        } else {
+            throw new Error(`Failed to fetch metrics (HTTP ${res.status})`);
+        }
     }
-    
-    const contentType = res.headers.get('content-type');
-    if (!contentType || !contentType.includes('application/json')) {
-      return { likes: '?', downloads: '?', pubPoints: '?' };
+
+    const contentType = res.headers.get("content-type");
+    if (!contentType || !contentType.includes("application/json")) {
+        return { likes: "?", downloads: "?", pubPoints: "?" };
     }
-    
+
     const data = await res.json();
     return {
-      likes: data.likes ?? '?',
-      downloads: data.downloads ?? '?',
-      pubPoints: data.pubPoints ?? '?',
+        likes: data.likes ?? "?",
+        downloads: data.downloads ?? "?",
+        pubPoints: data.pubPoints ?? "?",
+        version: data.version ?? "unknown",
     };
-  } catch {
-    return { likes: '?', downloads: '?', pubPoints: '?' };
-  }
 }
 
 // Graph Building
-async function buildGraph(pkg: string, parent: string | null = null, depth: number = 0): Promise<void> {
-  if (depth > maxDepth.value) return;
-  if (visitedPackages.has(pkg)) return;
+async function buildGraph(
+    pkg: string,
+    parent: string | null = null,
+    depth: number = 0,
+): Promise<void> {
+    if (depth > maxDepth.value) return;
+    if (visitedPackages.has(pkg)) return;
 
-  let metrics: PackageMetrics;
-  
-  try {
-    metrics = await getMetrics(pkg);
-  } catch (err) {
-    if (depth === 0) {
-      throw err;
+    let metrics: PackageMetrics;
+
+    try {
+        metrics = await getMetrics(pkg);
+    } catch (err) {
+        console.log('Err', depth)
+        if (depth === 0) {
+            throw err;
+        }
+        console.warn(
+            `Skipping ${pkg}: ${err instanceof Error ? err.message : "Unknown error"}`,
+        );
+        return;
     }
-    console.warn(`Skipping ${pkg}: ${err instanceof Error ? err.message : 'Unknown error'}`);
-    return;
-  }
 
-  visitedPackages.set(pkg, {  metrics, depth });
+    visitedPackages.set(pkg, { metrics, depth });
 
-  if (parent) {
-    edgesList.push({ from: parent, to: pkg });
-  }
+    if (parent) {
+        edgesList.push({ from: parent, to: pkg });
+    }
 
-  let deps: string[] = [];
-  try {
-    deps = await getDependencies(pkg);
-  } catch (err) {
-    console.warn(`Failed to get dependencies for ${pkg}: ${err instanceof Error ? err.message : 'Unknown error'}`);
-    return;
-  }
+    let deps: string[] = [];
+    try {
+        deps = await getDependencies(pkg);
+    } catch (err) {
+        console.warn(
+            `Failed to get dependencies for ${pkg}: ${err instanceof Error ? err.message : "Unknown error"}`,
+        );
+        return;
+    }
 
-  for (const dep of deps) {
-    await buildGraph(dep, pkg, depth + 1);
-  }
+    for (const dep of deps) {
+        await buildGraph(dep, pkg, depth + 1);
+    }
 }
 
 // Graph Rendering
 function renderGraph(): void {
-  const nodes: Node[] = [];
-  
-  for (const [name, info] of visitedPackages.entries()) {
-    const tooltip = `${name}
-Version: ${info.version}
-👍 Likes: ${info.metrics.likes}
-📥 Downloads: ${info.metrics.downloads}
-🏆 Pub Points: ${info.metrics.pubPoints}
-📏 Depth: ${info.depth}`;
-    
-    const colors = ['#3B82F6', '#8B5CF6', '#EC4899', '#F59E0B', '#10B981'];
-    const color = colors[Math.min(info.depth, colors.length - 1)];
-    
-    nodes.push({
-      id: name,
-      label: name,
-      title: tooltip,
-      shape: 'box',
-      font: { size: 13, color: '#1F2937' },
-      color: {
-        background: color,
-        border: color,
-        highlight: { background: color, border: '#1F2937' }
-      },
-      borderWidth: 2,
-      margin: {
-        top: 10,
-        bottom: 10,
-        left: 15,
-        right: 15
-      },
-      level: info.depth,
-    });
-  }
+    const nodes: Node[] = [];
 
-  const edges: Edge[] = edgesList.map(edge => ({
-    from: edge.from,
-    to: edge.to,
-    arrows: { to: { enabled: true, scaleFactor: 1 } },
-    color: { color: '#9CA3AF', highlight: '#3B82F6' },
-    width: 2,
-  }));
+    for (const [name, info] of visitedPackages.entries()) {
+        const tooltip = `${name}
+          Version: ${info.metrics.version || "unknown"}
+          👍 Likes: ${info.metrics.likes}
+          📥 Downloads: ${info.metrics.downloads}
+          🏆 Pub Points: ${info.metrics.pubPoints}
+          📏 Depth: ${info.depth}
+        `;
 
-  const container = networkContainer.value;
-  if (!container) return;
+        const colors = ["#3B82F6", "#8B5CF6", "#EC4899", "#F59E0B", "#10B981"];
+        const color = colors[Math.min(info.depth, colors.length - 1)];
 
-  const data = {
-    nodes: new DataSet(nodes),
-    edges: new DataSet(edges),
-  };
-
-  const options: Options = {
-    layout: {
-      hierarchical: {
-        enabled: true,
-        direction: 'UD',
-        sortMethod: 'directed',
-        levelSeparation: 150,
-        nodeSpacing: 180,
-      },
-    },
-    nodes: {
-      shape: 'box',
-      margin: {
-        top: 10,
-        bottom: 10,
-        left: 15,
-        right: 15
-      },
-      widthConstraint: { minimum: 120, maximum: 200 },
-      font: { size: 13, face: 'system-ui, -apple-system, sans-serif', color: '#FFFFFF' },
-      borderWidth: 0,
-      shadow: { enabled: true, color: 'rgba(0,0,0,0.1)', size: 8, x: 0, y: 2 },
-    },
-    edges: {
-      arrows: { to: { enabled: true, scaleFactor: 1 } },
-      smooth: { enabled: true, type: 'cubicBezier', roundness: 0.5 },
-      width: 2,
-    },
-    physics: false,
-    interaction: { 
-      hover: true, 
-      tooltipDelay: 100,
-      navigationButtons: true,
-      keyboard: true
-    },
-  };
-
-  if (network) network.destroy();
-  network = new Network(container, data, options);
-
-  // Center the graph after rendering
-  setTimeout(() => {
-    if (network) {
-      network.fit({
-        animation: {
-          duration: 500,
-          easingFunction: 'easeInOutQuad'
-        }
-      });
+        nodes.push({
+            id: name,
+            label: name,
+            title: tooltip,
+            shape: "box",
+            font: { size: 13, color: "#1F2937" },
+            color: {
+                background: color,
+                border: color,
+                highlight: { background: color, border: "#1F2937" },
+            },
+            borderWidth: 2,
+            margin: {
+                top: 10,
+                bottom: 10,
+                left: 15,
+                right: 15,
+            },
+            level: info.depth,
+        });
     }
-  }, 100);
+
+    const edges: Edge[] = edgesList.map((edge) => ({
+        from: edge.from,
+        to: edge.to,
+        arrows: { to: { enabled: true, scaleFactor: 1 } },
+        color: { color: "#9CA3AF", highlight: "#3B82F6" },
+        width: 2,
+    }));
+
+    const container = networkContainer.value;
+    if (!container) return;
+
+    const data = {
+        nodes: new DataSet(nodes),
+        edges: new DataSet(edges),
+    };
+
+    const options: Options = {
+        layout: {
+            hierarchical: {
+                enabled: true,
+                direction: "UD",
+                sortMethod: "directed",
+                levelSeparation: 150,
+                nodeSpacing: 180,
+            },
+        },
+        nodes: {
+            shape: "box",
+            margin: {
+                top: 10,
+                bottom: 10,
+                left: 15,
+                right: 15,
+            },
+            widthConstraint: { minimum: 120, maximum: 200 },
+            font: {
+                size: 13,
+                face: "system-ui, -apple-system, sans-serif",
+                color: "#FFFFFF",
+            },
+            borderWidth: 0,
+            shadow: {
+                enabled: true,
+                color: "rgba(0,0,0,0.1)",
+                size: 8,
+                x: 0,
+                y: 2,
+            },
+        },
+        edges: {
+            arrows: { to: { enabled: true, scaleFactor: 1 } },
+            smooth: { enabled: true, type: "cubicBezier", roundness: 0.5 },
+            width: 2,
+        },
+        physics: false,
+        interaction: {
+            hover: true,
+            tooltipDelay: 100,
+            navigationButtons: true,
+            keyboard: true,
+        },
+    };
+
+    if (network) network.destroy();
+    network = new Network(container, data, options);
+
+    // Center the graph after rendering
+    setTimeout(() => {
+        if (network) {
+            network.fit({
+                animation: {
+                    duration: 500,
+                    easingFunction: "easeInOutQuad",
+                },
+            });
+        }
+    }, 100);
 }
 
 // Main Load Function
 async function loadGraph(): Promise<void> {
-  if (!packageName.value.trim()) return;
-  
-  loading.value = true;
-  error.value = '';
-  visitedPackages.clear();
-  edgesList.length = 0;
+    if (!packageName.value.trim()) return;
 
-  try {
-    if (network) {
-      network.destroy();
-      network = null;
+    loading.value = true;
+    error.value = "";
+    visitedPackages.clear();
+    edgesList.length = 0;
+
+    try {
+        debugger
+        if (network) {
+            network.destroy();
+            network = null;
+        }
+        await buildGraph(packageName.value.trim(), null, 0);
+        if (visitedPackages.size === 0) {
+            error.value = "No dependencies found or package does not exist.";
+        } else {
+            await nextTick();
+            renderGraph();
+        }
+    } catch (err) {
+        console.log(`Error loading graph: ${err instanceof Error ? err.message : "Unknown error"}`);
+        error.value =
+            err instanceof Error
+                ? err.message
+                : "Error loading graph. Check console for details.";
+    } finally {
+        loading.value = false;
     }
-    await buildGraph(packageName.value.trim(), null, 0);
-    if (visitedPackages.size === 0) {
-      error.value = 'No dependencies found or package does not exist.';
-    } else {
-      await nextTick();
-      renderGraph();
-    }
-  } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Error loading graph. Check console for details.';
-  } finally {
-    loading.value = false;
-  }
 }
 
 const downloadImage = () => {
-  if (!network) return;
-  
-  network.fit({ animation: false });
+    if (!network) return;
 
-  requestAnimationFrame(() => {
-    const canvas = networkContainer.value?.querySelector("canvas") as HTMLCanvasElement;
-    if (!canvas) return;
-    const url = canvas.toDataURL("image/png");
+    network.fit({ animation: false });
 
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${packageName.value.trim()}-dependency-graph.png`;
-    a.click();
-  });
+    requestAnimationFrame(() => {
+        const canvas = networkContainer.value?.querySelector(
+            "canvas",
+        ) as HTMLCanvasElement;
+        if (!canvas) return;
+        const url = canvas.toDataURL("image/png");
+
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `${packageName.value.trim()}-dependency-graph.png`;
+        a.click();
+    });
 };
 
 // Cleanup
 onUnmounted(() => {
-  if (network) network.destroy();
+    if (network) network.destroy();
 });
 </script>
