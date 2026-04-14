@@ -18,15 +18,19 @@ export const GET: APIRoute = async ({ url }) => {
 
   try {
     const res = await fetch(`https://pub.dev/api/packages/${pkg}/metrics`);
-    if (!res.ok) throw new Error();
+
+    if (res.status === 404) {
+      return new Response('Package not found', { status: 404 });
+    }
     
     const data = await res.json();
     const result = {
       likes: data?.score?.likeCount ?? 0,
       downloads: data?.score?.downloadCount30Days ?? 0,
       pubPoints: data?.score?.grantedPoints ?? 0,
+      version: data?.scorecard?.packageVersion ?? 'unknown'
     };
-
+  
     cache.set(cacheKey, result);
 
     return new Response(JSON.stringify(result), {
@@ -36,7 +40,7 @@ export const GET: APIRoute = async ({ url }) => {
       }
     });
   } catch {
-    const fallback = { likes: '?', downloads: '?', pubPoints: '?' };
+    const fallback = { likes: '?', downloads: '?', pubPoints: '?', version: 'unknown' };
     return new Response(JSON.stringify(fallback), {
       headers: { 'Content-Type': 'application/json' }
     });

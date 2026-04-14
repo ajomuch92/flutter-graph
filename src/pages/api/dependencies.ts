@@ -17,8 +17,12 @@ export const GET: APIRoute = async ({ url }) => {
   }
 
   const res = await fetch(`https://pub.dev/api/packages/${pkg}`);
+  
+  if (res.status === 404) {
+    return new Response('Package not found', { status: 404 });
+  }
   const json = await res.json();
-
+  
   const { latest } = json;
   const { version, pubspec, archive_url: archiveUrl } = latest;
 
