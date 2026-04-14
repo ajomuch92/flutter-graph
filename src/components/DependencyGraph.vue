@@ -131,6 +131,7 @@ import { ref, onUnmounted, nextTick } from "vue";
 import { DataSet } from "vis-data";
 import { Network } from "vis-network";
 import type { Options, Node, Edge } from "vis-network";
+import { formatBytes } from "bytes-formatter";
 
 // Types
 interface PackageMetrics {
@@ -142,6 +143,8 @@ interface PackageMetrics {
 
 interface PackageInfo {
     version?: string;
+    description?: string;
+    sizeInBytes?: number;
     metrics: PackageMetrics;
     depth: number;
 }
@@ -181,6 +184,15 @@ async function getDependencies(pkg: string): Promise<string[]> {
     }
 
     const data = await res.json();
+    const { description, size } = data;
+    const currentInfo = visitedPackages.get(pkg)
+    if (currentInfo) {
+        visitedPackages.set(pkg, {
+            ...currentInfo,
+            description,
+            sizeInBytes: size,
+        });
+    }
     return data.dependencies || [];
 }
 
@@ -265,6 +277,8 @@ function renderGraph(): void {
           📥 Downloads: ${info.metrics.downloads}
           🏆 Pub Points: ${info.metrics.pubPoints}
           📏 Depth: ${info.depth}
+            ${info.description ? `📄 Description: ${info.description}` : ""}
+            ${info.sizeInBytes ? `📦 Size: ${formatBytes(info.sizeInBytes)} \n (compressed file size, not final app impact)` : ""}
         `;
 
         const colors = ["#3B82F6", "#8B5CF6", "#EC4899", "#F59E0B", "#10B981"];
@@ -381,7 +395,6 @@ async function loadGraph(): Promise<void> {
     edgesList.length = 0;
 
     try {
-        debugger
         if (network) {
             network.destroy();
             network = null;
