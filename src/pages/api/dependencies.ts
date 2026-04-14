@@ -37,7 +37,7 @@ export const GET: APIRoute = async ({ url }) => {
 
   const { description, dependencies } = pubspec;
 
-  const result = { dependencies: Object.keys(dependencies || {}), version, description, size: sizeInBytes };
+  const result = { dependencies: Object.keys(dependencies || {}).filter((dep) => !['flutter', 'flutter_test', 'sky_engine', 'flutter_driver'].includes(dep)), version, description, size: sizeInBytes };
   
   cache.set(cacheKey, result);
 
