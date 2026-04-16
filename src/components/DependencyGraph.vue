@@ -11,7 +11,7 @@
                         v-model="packageName"
                         type="text"
                         placeholder="e.g., flutter_riverpod, provider, bloc..."
-                        class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all outline-none"
+                        class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all outline-none lowercase"
                         @keyup.enter="loadGraph"
                     />
                 </div>
@@ -262,7 +262,7 @@ async function buildGraph(
     }
 
     for (const dep of deps) {
-        await buildGraph(dep, pkg, depth + 1);
+        await buildGraph(dep.trim().toLowerCase(), pkg, depth + 1);
     }
 }
 
@@ -399,7 +399,7 @@ async function loadGraph(): Promise<void> {
             network.destroy();
             network = null;
         }
-        await buildGraph(packageName.value.trim(), null, 0);
+        await buildGraph(packageName.value.trim().toLowerCase(), null, 0);
         if (visitedPackages.size === 0) {
             error.value = "No dependencies found or package does not exist.";
         } else {
